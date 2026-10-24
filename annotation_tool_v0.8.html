@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DarijaGenie annotation tool</title>
+<style>
+:root{--ink:#17212b;--soft:#4b5864;--line:#d8d2c6;--bg:#f7f4ee;--card:#fffdf8;--teal:#1f6f66;--rust:#b4532a;--warn:#fff2d6}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:15px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;color:var(--ink)}
+button:hover{background:#f0ece3}
+button.primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+button.primary:hover{background:#185a53}
+button.danger{color:var(--rust)}
+input[type=text],select,textarea{font:inherit;width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+textarea{min-height:70px;resize:vertical}
+.ar{font-family:'Noto Naskh Arabic','Segoe UI','Tahoma','Arial',sans-serif;font-size:21px;line-height:1.9}
+.setup{max-width:720px;margin:40px auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px}
+.setup h1{margin:0 0 6px;font-size:26px}
+.setup p{color:var(--soft)}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.hdr{display:flex;gap:14px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.hdr .grow,.grow{flex:1}
+.pill{background:#ece6da;border-radius:999px;padding:3px 10px;font-size:13px}
+.layout{display:grid;grid-template-columns:200px minmax(380px,1fr) 410px;min-height:calc(100vh - 56px)}
+.side{border-right:1px solid var(--line);background:var(--card);padding:10px;overflow:auto;max-height:calc(100vh - 56px)}
+.item{padding:7px 9px;border-radius:8px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.item:hover{background:#f0ece3}.item.cur{background:#e3efec;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%;background:#c9c3b6;flex:none}.dot.prog{background:#e0a030}.dot.done{background:var(--teal)}
+.main{padding:16px 22px;overflow:auto;max-height:calc(100vh - 56px)}
+.panel{border-left:1px solid var(--line);background:var(--card);padding:14px;overflow:auto;max-height:calc(100vh - 56px)}
+.turn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:10px 0}
+.turn.flag{border-color:var(--rust)}
+.turn .meta{display:flex;gap:8px;align-items:center;color:var(--soft);font-size:13px;margin-bottom:4px}
+.badge{border-radius:6px;padding:1px 8px;font-size:12px;background:#ece6da}
+.badge.staff,.badge.host{background:#dbe9f5}.badge.customer,.badge.guest{background:#f3e3d6}
+.errtag{display:inline-block;background:var(--warn);border:1px solid #e8cf94;border-radius:6px;padding:2px 8px;font-size:12px;margin:4px 6px 0 0}
+mark.mk{background:#ffe08a;border-radius:3px;cursor:pointer;padding:0 1px;color:inherit}
+mark.mk:hover{background:#ffd24d}
+.box{border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;background:#fff}
+.box h3{margin:0 0 8px;font-size:15px}
+.warn{background:var(--warn);border:1px solid #e8cf94;border-radius:10px;padding:10px;margin:10px 0}
+.small{font-size:13px;color:var(--soft)}
+label.opt{display:block;padding:3px 0}
+.hint{background:#e3efec;border-radius:10px;padding:8px 12px;font-size:13px;margin:8px 0}
+.spec{background:#ece6da;border-radius:10px;padding:8px 12px;margin:6px 0;font-size:13px}
+.overlay{position:fixed;inset:0;background:rgba(23,33,43,.55);z-index:20;display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:30px 12px}
+.sheet{background:var(--card);max-width:820px;width:100%;border-radius:14px;padding:24px 28px;border:1px solid var(--line)}
+.sheet h2{margin:0 0 6px}.sheet h3{margin:18px 0 6px}
+.sheet dt{font-weight:600;margin-top:10px}.sheet dd{margin:2px 0 0;color:var(--soft)}
+.sheet .ex{font-family:'Noto Naskh Arabic','Segoe UI','Tahoma',Arial,sans-serif;font-size:18px;color:var(--ink)}
+.cgrp{font-size:12px;font-weight:600;color:var(--soft);margin:10px 0 2px}
+.copt{display:flex;gap:8px;align-items:flex-start;padding:5px 6px;border-radius:8px;cursor:pointer}
+.copt:hover{background:#f0ece3}
+.copt input{margin-top:4px;flex:none}
+.cdesc{display:block;font-size:12px;color:var(--soft);font-weight:400}
+.copt input:checked+span b{color:var(--teal)}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}.side,.panel,.main{max-height:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+'use strict';
+var VERSION='0.8';
+
+/* ---------- categories ---------- */
+var WORD_GROUPS=[
+['Form',[
+ ['Agreement','A verb, pronoun or noun does not agree in person, number or gender with the speaker or the person addressed (for example one guest addressed in the plural). The word itself exists.'],
+ ['Malformed word form','A word or conjugation that does not exist, or a spelling so far off that the intended word cannot be recognized. A different valid spelling is NOT an error.'],
+ ['Misspelled word','The intended word is clear, but it is written with a wrong, missing or extra letter, in a way Moroccans would not write it (a typo). A different spelling that people do use is NOT an error. If the intended word cannot be recognized, use Malformed word form.']]],
+['Word choice',[
+ ['Wrong word or calque','A real word with the wrong meaning, a word-for-word rendering of an English or French expression, or a foreign word that people do not actually say in Darija.']]],
+['Register',[
+ ['MSA intrusion','A formal or written Arabic word or construction that a speaker would not say here.'],
+ ['Other Arabic dialect','A word or expression from another spoken Arabic dialect (for example Egyptian, Levantine or Gulf) that Moroccans do not use in Darija.'],
+ ['Wrong register or impolite','A real Darija word or style that is too slangy, rude, or too formal or informal for a customer-service conversation.']]],
+['Content',[
+ ['Wrong or implausible content','The words refer to something that was not mentioned, or a number, price, date or quantity makes no sense in context.'],
+ ['Unnecessary words','Not wrong in themselves, but they add nothing or do not belong in this turn.']]],
+['Other',[
+ ['Other','Anything else that is wrong in these words. A note is required.']]]];
+var FLOW_CATS=[
+ ['Repeated question or information','A question that was already asked or answered is asked again, or the same information is repeated needlessly.'],
+ ['Question or request not answered','A direct question, or an explicit request such as a booking request, is ignored in the next turn.'],
+ ['States something they could not know','A speaker states a detail that the other person has not given and that the speaker could not have known.'],
+ ['Contradiction','A number, name, date or fact differs from what was said in an earlier turn of the same dialogue.'],
+ ['Too many topics in one turn','One turn asks or tells about three or more different things.'],
+ ['Does not follow or feels unnatural','The turn does not follow from what was just said, a speaker says what the other role would say, or the exchange reads like a checklist and not like a real conversation. Use it only if none of the specific flow categories above fits, and not for a turn that sounds odd only because of a word you already marked.'],
+ ['Other flow problem','Anything else about how the turns fit together. A note is required.']];
+/* Examples shown in the guide. Add or change them here; leave a category out to show no example. */
+var GUIDE_EXAMPLES={
+ 'Malformed word form':'ريزيرڤا (a cut-off form of "reservation"; people say ريزيرڤاسيون or نريزيرڤي)',
+ 'Wrong word or calque':'نون سموكينڭ (an English-style word where people say نون فومور)'};
+var VERDICTS=[['ok','Acceptable as it is'],['fixed','Acceptable after my corrections'],['reject','Reject: cannot be fixed']];
+var DIAL_CATS=[];
+var NAT=[[1,'1  Not natural: nobody would talk like this'],[2,'2'],[3,'3  Partly natural: understandable, but stiff or scripted in places'],[4,'4'],[5,'5  Natural: sounds like a real conversation']];
+
+function famOfWord(cat){for(var i=0;i<WORD_GROUPS.length;i++){var g=WORD_GROUPS[i];for(var j=0;j<g[1].length;j++)if(g[1][j][0]===cat)return g[0];}return 'Other';}
+
+/* ---------- state ---------- */
+var S={annotator:'',dataset:'',dialogues:[],ann:{},cur:0,editing:null,lastActivity:Date.now(),savedAt:null,heldOut:0,doneSinceExport:0,showGuide:false,pendingInput:null,pendingProgress:null,msg:''};
+
+function el(tag,attrs){
+  var e=document.createElement(tag);attrs=attrs||{};
+  Object.keys(attrs).forEach(function(k){
+    var v=attrs[k];
+    if(k==='class')e.className=v;else if(k==='text')e.textContent=v;
+    else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);
+    else if(v!==false&&v!==null&&v!==undefined)e.setAttribute(k,v===true?'':v);
+  });
+  for(var i=2;i<arguments.length;i++){
+    var kids=arguments[i];if(!Array.isArray(kids))kids=[kids];
+    kids.forEach(function(c){if(c===null||c===undefined||c===false)return;e.appendChild(typeof c==='string'?document.createTextNode(c):c);});
+  }
+  return e;
+}
+function $(s){return document.querySelector(s);}
+function now(){return new Date().toISOString();}
+function storeKey(){return 'dg_annot_v2|'+S.annotator+'|'+S.dataset;}
+function saveLocal(){
+  try{localStorage.setItem(storeKey(),JSON.stringify({ann:S.ann,cur:S.cur,savedAt:now()}));S.savedAt=new Date();}
+  catch(e){S.msg='Could not save in this browser. Export your work often.';}
+  var s=$('#saved');if(s)s.textContent=S.savedAt?'Saved '+S.savedAt.toLocaleTimeString():'';
+}
+function loadLocal(){
+  try{var raw=localStorage.getItem(storeKey());if(!raw)return false;var o=JSON.parse(raw);
+    Object.keys(o.ann||{}).forEach(function(k){if(S.ann[k]){S.ann[k]=o.ann[k];if(S.ann[k].naturalness===undefined)S.ann[k].naturalness=null;}});
+    S.cur=Math.min(o.cur||0,Math.max(0,S.dialogues.length-1));return true;}catch(e){return false;}
+}
+function newAnn(){return {verdict:null,naturalness:null,dialogue_categories:[],dialogue_comment:'',time_seconds:0,errors:[],done:false,completed_at:null};}
+function scriptOf(t){
+  var ar=(t.match(/[\u0600-\u06FF]/g)||[]).length,la=(t.match(/[A-Za-z]/g)||[]).length;
+  if(ar&&la)return 'mixed';if(ar)return 'arabic';if(la)return 'latin';return 'none';
+}
+
+/* ---------- input / output ---------- */
+function loadInput(obj){
+  var list=obj&&(obj.dialogues||obj.items);
+  if(!Array.isArray(list))throw new Error('This file has no "dialogues" (or "items") list.');
+  var kept=[],held=0,seen={};
+  list.forEach(function(d,ix){
+    if(!d||!Array.isArray(d.turns))throw new Error('A dialogue is missing "turns".');
+    var id=d.dialogue_id||(d.case_id?d.case_id+(d.arm?'#'+d.arm:''):null);
+    if(!id)throw new Error('A dialogue is missing "dialogue_id" (or "case_id").');
+    if(d.holdout===true){held++;return;}
+    if(seen[id])id=id+'#'+ix;seen[id]=1;
+    kept.push({dialogue_id:id,label:d.dialogue_id||d.case_id||id,domain:d.domain||null,arm:d.arm||null,meta:d.meta||null,
+      turns:d.turns.map(function(t,k){return {i:t.i||k+1,role:t.role||t.speaker||'',stage:t.stage||'',text:t.text||''};})});
+  });
+  S.dataset=obj.dataset||'unnamed';S.dialogues=kept;S.heldOut=held;S.ann={};S.cur=0;
+  kept.forEach(function(d){S.ann[d.dialogue_id]=newAnn();});
+}
+function mergeProgress(obj){
+  if(!obj||!Array.isArray(obj.dialogues))throw new Error('This is not an output file.');
+  obj.dialogues.forEach(function(d){
+    if(!S.ann[d.dialogue_id])return;
+    S.ann[d.dialogue_id]={verdict:d.verdict||null,naturalness:d.naturalness||null,dialogue_categories:d.dialogue_categories||[],dialogue_comment:d.dialogue_comment||'',
+      time_seconds:d.time_seconds||0,errors:(d.errors||[]).map(function(e,i){return {id:e.id||('e'+i),kind:e.kind,turn:e.turn,turns:e.turns,span_start:e.span_start,span_end:e.span_end,span_text:e.span_text,
+        family:e.family,category:e.category,replacement:e.replacement,remove:!!e.remove,script:e.script,note:e.note||''};}),
+      done:!!d.completed_at,completed_at:d.completed_at||null};
+  });
+}
+function turnOf(d,n){for(var i=0;i<d.turns.length;i++)if(d.turns[i].i===n)return d.turns[i];return null;}
+function applyWordErrors(text,errs){
+  var list=errs.slice().sort(function(a,b){return b.span_start-a.span_start;});
+  list.forEach(function(e){text=text.slice(0,e.span_start)+(e.remove?'':(e.replacement||''))+text.slice(e.span_end);});
+  return text;
+}
+function buildOutput(){
+  return {format:'darijagenie-annotation-output/2',tool_version:VERSION,annotator:S.annotator,dataset:S.dataset,saved_at:now(),held_out_not_loaded:S.heldOut,
+    dialogues:S.dialogues.map(function(d){
+      var a=S.ann[d.dialogue_id],corrections=[];
+      d.turns.forEach(function(t){
+        var we=a.errors.filter(function(e){return e.kind==='word'&&e.turn===t.i;});
+        if(we.length){var c=applyWordErrors(t.text,we);corrections.push({turn:t.i,original:t.text,corrected:c,script:scriptOf(c)});}
+      });
+      return {dialogue_id:d.dialogue_id,domain:d.domain||null,arm:d.arm||null,verdict:a.verdict,naturalness:a.naturalness,dialogue_categories:a.dialogue_categories,dialogue_comment:a.dialogue_comment,
+        time_seconds:a.time_seconds,completed_at:a.completed_at,errors:a.errors,corrected_turns:corrections};})};
+}
+function csvEsc(v){v=(v===null||v===undefined)?'':String(v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function turnsLabel(e){return e.kind==='word'?String(e.turn):(e.turns&&e.turns.length?(e.turns[0]===e.turns[e.turns.length-1]?String(e.turns[0]):e.turns[0]+'-'+e.turns[e.turns.length-1]):'');}
+function buildCsv(){
+  var cols=['dialogue_id','domain','arm','verdict','naturalness','time_seconds','dialogue_categories','dialogue_comment','kind','turns','span_text','span_start','span_end','family','category','replacement','remove','script','note','original_turn'];
+  var rows=[cols.join(',')];
+  S.dialogues.forEach(function(d){
+    var a=S.ann[d.dialogue_id];
+    var base=[d.dialogue_id,d.domain||'',d.arm||'',a.verdict||'',a.naturalness||'',a.time_seconds,(a.dialogue_categories||[]).join('; '),a.dialogue_comment];
+    if(!a.errors.length)rows.push(base.concat(['','','','','','','','','','','']).map(csvEsc).join(','));
+    a.errors.forEach(function(e){
+      var t=e.kind==='word'?turnOf(d,e.turn):null;
+      rows.push(base.concat([e.kind,turnsLabel(e),e.span_text||'',e.span_start===undefined?'':e.span_start,e.span_end===undefined?'':e.span_end,e.family,e.category,e.replacement||'',e.remove?'yes':'',e.script||'',e.note||'',t?t.text:'']).map(csvEsc).join(','));
+    });
+  });
+  return '\ufeff'+rows.join('\r\n');
+}
+function download(name,text,type){
+  var b=new Blob([text],{type:type});var u=URL.createObjectURL(b);
+  var a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},200);
+}
+function exportAll(){
+  var stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  var base='annotations_'+S.dataset+'_'+S.annotator+'_'+stamp;
+  download(base+'.json',JSON.stringify(buildOutput(),null,2),'application/json');
+  download(base+'.csv',buildCsv(),'text/csv;charset=utf-8');
+  S.doneSinceExport=0;render();
+}
+
+/* ---------- demo ---------- */
+var DEMO={format:'darijagenie-annotation-input/1',dataset:'demo',dialogues:[
+ {dialogue_id:'DEMO-1',domain:'hotel',arm:'hidden',meta:{summary:'Phone reservation, double room, 2 people, 2 nights'},turns:[
+  {i:1,role:'staff',stage:'opening',text:'آلو، أوطيل أطلس، سلام وعليكم.'},
+  {i:2,role:'customer',stage:'opening',text:'وعليكم السلام. بغيت نريزيرڤي بيت لهاد الويكاند عافاك.'},
+  {i:3,role:'staff',stage:'details',text:'واخا أ لالة، من نهار الجمعة تال الأحد ياك؟'},
+  {i:4,role:'customer',stage:'details',text:'إيه، حنا جوج د الناس.'},
+  {i:5,role:'staff',stage:'closing',text:'مقيدة أ لالة. نتسناوكم نهار الجمعة إن شاء الله.'},
+  {i:6,role:'customer',stage:'closing',text:'شكرا بزاف، بسلامة.'}]},
+ {dialogue_id:'DEMO-2',domain:'hotel',arm:'hidden',meta:{summary:'Check-in with a reservation on file'},turns:[
+  {i:1,role:'customer',stage:'opening',text:'سلام، راني مريزيرڤي عندكم ليوم.'},
+  {i:2,role:'staff',stage:'details',text:'سلام أ سيدي. شنو السمية عافاك باش نقلب فالبيسي؟'},
+  {i:3,role:'customer',stage:'details',text:'يوسف العمراني.'},
+  {i:4,role:'staff',stage:'closing',text:'مزيان. هاك الساروت، البيت ف الطابق التاني، رقم 204.'}]},
+ {dialogue_id:'DEMO-LOCKED',domain:'dataset3',holdout:true,turns:[{i:1,role:'staff',text:'x'}]}]};
+
+/* ---------- screens ---------- */
+function render(){
+  var app=$('#app');app.innerHTML='';
+  if(!S.dialogues.length){app.appendChild(renderSetup());return;}
+  app.appendChild(renderHeader());
+  app.appendChild(el('div',{class:'layout'},renderSide(),el('div',{class:'main',id:'main'}),el('div',{class:'panel',id:'panel'})));
+  renderMain();renderPanel();
+  if(S.showGuide)app.appendChild(renderGuide());
+}
+function renderSetup(){
+  var name=el('input',{type:'text',id:'who',placeholder:'for example sara, tester1',value:S.annotator});
+  name.addEventListener('input',function(){S.annotator=name.value.trim();});
+  var inFile=el('input',{type:'file',accept:'.json',id:'inputfile'});
+  var prFile=el('input',{type:'file',accept:'.json',id:'progressfile'});
+  var msg=el('div',{id:'setupmsg',class:S.msg?'warn':'small',text:S.msg||''});
+  inFile.addEventListener('change',function(){readFile(inFile,function(o){S.pendingInput=o;msg.className='small';msg.textContent='Dialogues file loaded.';});});
+  prFile.addEventListener('change',function(){readFile(prFile,function(o){S.pendingProgress=o;msg.className='small';msg.textContent='Previous output file loaded; it will be merged.';});});
+  function start(obj){
+    if(!S.annotator){S.msg='Please enter your annotator name first.';render();return;}
+    try{loadInput(obj);loadLocal();if(S.pendingProgress)mergeProgress(S.pendingProgress);S.msg='';
+      var seen=false;try{seen=!!localStorage.getItem('dg_guide_seen');localStorage.setItem('dg_guide_seen','1');}catch(e){}
+      if(!seen)S.showGuide=true;}
+    catch(e){S.msg=e.message;S.dialogues=[];}
+    render();
+  }
+  return el('div',{class:'setup'},
+    el('h1',{text:'DarijaGenie annotation tool'}),
+    el('p',{text:'Read each dialogue. Select the wrong words with your mouse, choose what kind of error it is and type what it should be. For problems that involve several turns, mark a conversation flow error. Your work is saved in this browser while you go. Export it at least every few dialogues.'}),
+    el('div',{class:'row'},el('label',{text:'Your name or id:'}),name),
+    el('div',{class:'row'},el('label',{text:'Dialogues file:'}),inFile),
+    el('div',{class:'row'},el('label',{class:'small',text:'Optional, to continue on another computer: your earlier output file'}),prFile),
+    msg,
+    el('div',{class:'row'},
+      el('button',{class:'primary',text:'Start',onclick:function(){if(!S.pendingInput){S.msg='Choose the dialogues file first.';render();return;}start(S.pendingInput);}}),
+      el('button',{text:'Try the demo',onclick:function(){if(!S.annotator)S.annotator='demo';S.pendingProgress=null;start(JSON.parse(JSON.stringify(DEMO)));}})),
+    el('p',{class:'small',text:'Held-out dialogues are never loaded into this tool. Tool version '+VERSION+'.'}));
+}
+function readFile(input,cb){
+  var f=input.files&&input.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){try{cb(JSON.parse(r.result));}catch(e){S.msg='That file is not valid JSON.';render();}};
+  r.readAsText(f,'utf-8');
+}
+function doneCount(){return S.dialogues.filter(function(d){return S.ann[d.dialogue_id].done;}).length;}
+function fmt(s){var m=Math.floor(s/60),r=s%60;return m+':'+(r<10?'0':'')+r;}
+function renderHeader(){
+  var d=S.dialogues[S.cur];
+  return el('div',{class:'hdr'},
+    el('strong',{text:'DarijaGenie annotation'}),
+    el('span',{class:'pill',text:'dataset: '+S.dataset}),
+    el('span',{class:'pill',text:'annotator: '+S.annotator}),
+    el('span',{class:'pill',text:doneCount()+' of '+S.dialogues.length+' done'}),
+    S.heldOut?el('span',{class:'pill',text:S.heldOut+' held-out not loaded'}):null,
+    el('span',{class:'grow'}),
+    el('span',{class:'small',id:'timer',text:'time on this dialogue: '+fmt(S.ann[d.dialogue_id].time_seconds)}),
+    el('span',{class:'small',id:'saved',text:S.savedAt?'Saved '+S.savedAt.toLocaleTimeString():''}),
+    el('button',{text:'Guide',onclick:function(){S.showGuide=true;render();}}),
+    el('button',{class:'primary',text:'Export',onclick:exportAll}));
+}
+function renderSide(){
+  var side=el('div',{class:'side'});
+  S.dialogues.forEach(function(d,i){
+    var a=S.ann[d.dialogue_id];var cls=a.done?'done':(a.errors.length||a.verdict?'prog':'');
+    side.appendChild(el('div',{class:'item'+(i===S.cur?' cur':''),onclick:function(){go(i);}},el('span',{class:'dot '+cls}),el('span',{text:(i+1)+'. '+(d.label||d.dialogue_id)})));
+  });
+  return side;
+}
+function go(i){S.cur=Math.max(0,Math.min(S.dialogues.length-1,i));S.editing=null;saveLocal();render();var m=$('#main');if(m)m.scrollTop=0;}
+function nextPending(){
+  for(var k=1;k<=S.dialogues.length;k++){var j=(S.cur+k)%S.dialogues.length;if(!S.ann[S.dialogues[j].dialogue_id].done)return j;}
+  return S.cur;
+}
+
+/* ---------- guide ---------- */
+function renderGuide(){
+  var sheet=el('div',{class:'sheet'});
+  sheet.appendChild(el('h2',{text:'How to annotate'}));
+  sheet.appendChild(el('p',{text:'You are checking generated Moroccan Darija dialogues that will be used to teach Darija to learners. Judge them as a native speaker from Casablanca would: would a real person say this, in this situation?'}));
+  sheet.appendChild(el('h3',{text:'What to do, step by step'}));
+  var ol=el('ol');
+  ['Read the whole dialogue first.','Select the wrong words or phrase in a turn with your mouse. The selected part opens in the panel on the right. On a phone: press and hold on a word, drag the handles to cover the wrong words, then tap "Mark selected words" on that turn; the panel opens below the dialogue.','Choose the category, then type what it should be instead (or tick "remove these words").','If a turn has two different errors, select each one separately and give each its own category.','If the problem involves one or more whole turns (a repeated question, a turn that does not follow, too many topics), use "Mark a flow error" on that turn.','At the end, choose the overall verdict and click "Mark done and go on".'].forEach(function(t){ol.appendChild(el('li',{text:t}));});
+  sheet.appendChild(ol);
+  sheet.appendChild(el('h3',{text:'Two kinds of errors'}));
+  sheet.appendChild(el('p',{text:'Word or phrase error: something wrong inside a turn. You select the exact words, so one turn can hold several errors, each with its own category.'}));
+  sheet.appendChild(el('p',{text:'Conversation flow error: something wrong in how turns fit together. You mark one turn or a range of turns, with no word selection.'}));
+  sheet.appendChild(el('h3',{text:'Word or phrase errors'}));
+  var dl=el('dl');
+  WORD_GROUPS.forEach(function(g){
+    dl.appendChild(el('dt',{text:'— '+g[0]+' —'}));
+    g[1].forEach(function(c){
+      dl.appendChild(el('dt',{text:c[0]}));
+      dl.appendChild(el('dd',{text:c[1]}));
+      if(GUIDE_EXAMPLES[c[0]])dl.appendChild(el('dd',{},'Example: ',el('span',{class:'ex',dir:'auto',text:GUIDE_EXAMPLES[c[0]]})));
+    });
+  });
+  sheet.appendChild(dl);
+  sheet.appendChild(el('h3',{text:'Conversation flow errors'}));
+  var dl2=el('dl');
+  FLOW_CATS.forEach(function(c){
+    dl2.appendChild(el('dt',{text:c[0]}));dl2.appendChild(el('dd',{text:c[1]}));
+    if(GUIDE_EXAMPLES[c[0]])dl2.appendChild(el('dd',{},'Example: ',el('span',{class:'ex',dir:'auto',text:GUIDE_EXAMPLES[c[0]]})));
+  });
+  sheet.appendChild(dl2);
+  sheet.appendChild(el('h3',{text:'Choosing between similar categories'}));
+  var ul2=el('ul');
+  ['Agreement or Malformed word form? Ignore the rest of the sentence. If this word could never be said in Darija (invented stem, fake conjugation, unreadable), choose Malformed word form. If it is a real Darija word but has the wrong person, number or gender here, choose Agreement. A normal informal spelling of a real word is not an error.',
+   'Wrong word or calque, MSA intrusion, Other Arabic dialect, or Wrong register? If it is a word-for-word translation of a French or English expression, a foreign word people do not say, or has the wrong meaning, choose Wrong word or calque. If the meaning is right but it is formal written Arabic, choose MSA intrusion. If the meaning is right but it belongs to another Arabic dialect, choose Other Arabic dialect. If it is real Darija but the tone is wrong (too slangy, rude, too formal or informal), choose Wrong register or impolite.',
+   'Word error or flow error? Check the specific flow categories first. Do not also mark a whole turn as "Does not follow or feels unnatural" because of a word you already marked.'].forEach(function(t){ul2.appendChild(el('li',{text:t}));});
+  sheet.appendChild(ul2);
+  sheet.appendChild(el('h3',{text:'Rules of thumb'}));
+  var ul=el('ul');
+  ['Several spellings of a Darija word can all be valid. A different spelling is not an error.','Mark the smallest part that is wrong, not the whole sentence.','French words that Moroccans really say are fine. Mark a foreign word only if people do not say it.','Do not change things only because you would say them differently. Mark what a native speaker would find wrong or unnatural.','If nothing fits, choose "Other" and write a short note.','Write your corrected words in Arabic script.','Select whole words, including letters attached to them such as د or و.','Put only the corrected words in the correction box. Write any comment in the note.'].forEach(function(t){ul.appendChild(el('li',{text:t}));});
+  sheet.appendChild(ul);
+  sheet.appendChild(el('h3',{text:'How natural it sounds'}));
+  sheet.appendChild(el('p',{text:'For each dialogue, rate from 1 to 5 how natural the whole conversation sounds as Moroccan Darija between a customer and staff. Give your impression of the dialogue as you read it, before your corrections. Spelling variants do not lower the rating.'}));
+  sheet.appendChild(el('h3',{text:'Overall verdict'}));
+  sheet.appendChild(el('p',{text:'Acceptable as it is: no errors. Acceptable after my corrections: you marked errors and your corrections fix them. Reject: the dialogue cannot be fixed with corrections.'}));
+  sheet.appendChild(el('p',{class:'small',text:'Shortcuts: Alt + right arrow and Alt + left arrow move between dialogues. Time is counted while you are active on a dialogue; it pauses after 90 seconds without activity.'}));
+  sheet.appendChild(el('div',{class:'row'},el('button',{class:'primary',text:'Close the guide',onclick:function(){S.showGuide=false;render();}})));
+  return el('div',{class:'overlay',onclick:function(ev){if(ev.target===this){S.showGuide=false;render();}}},sheet);
+}
+
+/* ---------- main column ---------- */
+var IS_TOUCH=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+var SEL_BOXES=[],LAST_SEL=null;
+function spanFromSelection(box,t){
+  var sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return null;
+  var r=sel.getRangeAt(0);if(!box.contains(r.commonAncestorContainer))return null;
+  var a=offsetIn(box,r.startContainer,r.startOffset),b=offsetIn(box,r.endContainer,r.endOffset);
+  if(a>b){var x=a;a=b;b=x;}
+  while(a<b&&/\s/.test(t.text.charAt(a)))a++;
+  while(b>a&&/\s/.test(t.text.charAt(b-1)))b--;
+  return b>a?[a,b]:null;
+}
+document.addEventListener('selectionchange',function(){
+  var sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return;
+  for(var i=0;i<SEL_BOXES.length;i++){var bx=SEL_BOXES[i];if(!document.body.contains(bx))continue;
+    var sp=spanFromSelection(bx,bx._turn);if(sp){LAST_SEL={turn:bx._turn.i,start:sp[0],end:sp[1],dlg:S.cur};return;}}
+});
+function markSelected(turn){
+  if(!LAST_SEL||LAST_SEL.turn!==turn||LAST_SEL.dlg!==S.cur){S.msg='First select the wrong words in this turn, then tap "Mark selected words".';renderPanel();scrollPanel();return;}
+  var s0=LAST_SEL;LAST_SEL=null;try{window.getSelection().removeAllRanges();}catch(e){}
+  S.msg='';startWord(turn,s0.start,s0.end,null);
+}
+function scrollPanel(){if(window.innerWidth<1100){var p=$('#panel');if(p&&p.scrollIntoView)p.scrollIntoView({behavior:'smooth',block:'start'});}}
+function offsetIn(container,node,off){var r=document.createRange();r.selectNodeContents(container);r.setEnd(node,off);return r.toString().length;}
+function turnTextEl(t,errs){
+  var box=el('div',{class:'ar',dir:'auto'});
+  var words=errs.filter(function(e){return e.kind==='word'&&e.turn===t.i;}).sort(function(a,b){return a.span_start-b.span_start;});
+  var pos=0;
+  words.forEach(function(e){
+    if(e.span_start>pos)box.appendChild(document.createTextNode(t.text.slice(pos,e.span_start)));
+    var m=el('mark',{class:'mk',title:e.category+' (click to edit)'},t.text.slice(e.span_start,e.span_end));
+    m.addEventListener('click',function(ev){var s=window.getSelection();if(s&&!s.isCollapsed)return;ev.stopPropagation();startEditById(e.id);});
+    box.appendChild(m);pos=Math.max(pos,e.span_end);
+  });
+  if(pos<t.text.length)box.appendChild(document.createTextNode(t.text.slice(pos)));
+  if(!box.childNodes.length)box.appendChild(document.createTextNode(''));
+  box._turn=t;SEL_BOXES.push(box);
+  box.addEventListener('mouseup',function(){
+    var sp=spanFromSelection(box,t);if(!sp)return;
+    window.getSelection().removeAllRanges();startWord(t.i,sp[0],sp[1],null);
+  });
+  return box;
+}
+function renderMain(){
+  var main=$('#main');main.innerHTML='';SEL_BOXES=[];LAST_SEL=null;
+  var d=S.dialogues[S.cur],a=S.ann[d.dialogue_id];
+  main.appendChild(el('h2',{text:(d.label||d.dialogue_id)}));
+  main.appendChild(el('div',{class:'hint',text:IS_TOUCH?'On a phone: press and hold on a word, drag the handles to select the wrong words, then tap "Mark selected words" on that turn. For a problem across turns, use "Mark a flow error".':'Select the wrong words in a turn with your mouse to mark them. For a problem across turns, use "Mark a flow error".'}));
+  if(d.meta&&d.meta.summary){
+    main.appendChild(el('details',{},el('summary',{class:'small',text:'Case details (open only if you need to check a fact)'}),el('div',{class:'spec',text:d.meta.summary})));
+  }
+  d.turns.forEach(function(t){
+    var n=t.i;
+    var hits=a.errors.filter(function(e){return e.kind==='word'?e.turn===n:(e.turns||[]).indexOf(n)>=0;});
+    var flows=a.errors.filter(function(e){return e.kind==='flow'&&(e.turns||[]).indexOf(n)>=0;});
+    var row=el('div',{class:'turn'+(hits.length?' flag':'')},
+      el('div',{class:'meta'},el('span',{text:'turn '+n}),el('span',{class:'badge '+(t.role||''),text:t.role||''}),t.stage?el('span',{class:'small',text:t.stage}):null,
+        el('span',{class:'grow'}),IS_TOUCH?el('button',{text:'Mark selected words',onclick:function(){markSelected(n);}}):null,el('button',{text:'Mark a flow error',onclick:function(){startFlow(n,null);}})),
+      turnTextEl(t,a.errors),
+      flows.map(function(e){return el('span',{class:'errtag',text:'flow: '+e.category});}));
+    main.appendChild(row);
+  });
+}
+
+/* ---------- editing ---------- */
+function startWord(turn,start,end,id){
+  var d=S.dialogues[S.cur],t=turnOf(d,turn);
+  if(id){var e=S.ann[d.dialogue_id].errors.filter(function(x){return x.id===id;})[0];
+    S.editing={kind:'word',id:id,turn:e.turn,start:e.span_start,end:e.span_end,spanText:e.span_text,cat:e.category,replacement:e.replacement||'',remove:!!e.remove,note:e.note||'',err:''};}
+  else S.editing={kind:'word',id:null,turn:turn,start:start,end:end,spanText:t.text.slice(start,end),cat:'',replacement:'',remove:false,note:'',err:''};
+  renderPanel();scrollPanel();
+}
+function startFlow(turn,id){
+  var d=S.dialogues[S.cur];
+  if(id){var e=S.ann[d.dialogue_id].errors.filter(function(x){return x.id===id;})[0];
+    S.editing={kind:'flow',id:id,from:e.turns[0],to:e.turns[e.turns.length-1],cat:e.category,note:e.note||'',err:''};}
+  else S.editing={kind:'flow',id:null,from:turn,to:turn,cat:'',note:'',err:''};
+  renderPanel();scrollPanel();
+}
+function startEditById(id){
+  var d=S.dialogues[S.cur];var e=S.ann[d.dialogue_id].errors.filter(function(x){return x.id===id;})[0];
+  if(!e)return;if(e.kind==='word')startWord(e.turn,0,0,id);else startFlow(0,id);
+}
+function catPicker(groups,current,onPick){
+  var box=el('div',{class:'cats'});
+  groups.forEach(function(g){
+    if(g[0])box.appendChild(el('div',{class:'cgrp',text:g[0]}));
+    g[1].forEach(function(c){
+      var r=el('input',{type:'radio',name:'ecatr',value:c[0],checked:current===c[0]});
+      r.addEventListener('change',function(){onPick(c[0]);});
+      box.appendChild(el('label',{class:'copt'},r,el('span',{},el('b',{text:c[0]}),el('span',{class:'cdesc',text:c[1]}))));
+    });
+  });
+  return box;
+}
+function renderPanel(){
+  var p=$('#panel');if(!p)return;p.innerHTML='';
+  var d=S.dialogues[S.cur],a=S.ann[d.dialogue_id];
+  if(S.editing){
+    var ed=S.editing;
+    if(ed.kind==='word'){
+      var catSel=catPicker(WORD_GROUPS,ed.cat,function(v){ed.cat=v;});
+      var rep=el('input',{type:'text',id:'erep',class:'ar',dir:'rtl',placeholder:'What it should be'});rep.value=ed.replacement;
+      rep.addEventListener('input',function(){ed.replacement=rep.value;});
+      var rm=el('input',{type:'checkbox',checked:ed.remove});rm.addEventListener('change',function(){ed.remove=rm.checked;});
+      var note=el('textarea',{id:'enote'});note.value=ed.note;note.style.minHeight='50px';note.addEventListener('input',function(){ed.note=note.value;});
+      p.appendChild(el('div',{class:'box'},
+        el('h3',{text:(ed.id?'Edit word or phrase error':'New word or phrase error')+' in turn '+ed.turn}),
+        el('div',{class:'small',text:'Selected words:'}),el('div',{class:'ar',dir:'auto',text:ed.spanText}),
+        el('label',{class:'small',text:'Category'}),catSel,
+        el('label',{class:'small',text:'What it should be (Arabic or Latin script)'}),rep,
+        el('label',{class:'opt'},rm,' remove these words, no replacement'),
+        el('label',{class:'small',text:'Note (required for "Other")'}),note,
+        ed.err?el('div',{class:'warn',text:ed.err}):null,
+        el('div',{class:'row'},el('button',{class:'primary',text:'Save error',onclick:saveEdit}),el('button',{text:'Cancel',onclick:function(){S.editing=null;renderPanel();}}))));
+    }else{
+      var max=d.turns.length;
+      var from=el('input',{type:'text',id:'efrom',value:String(ed.from)});from.addEventListener('input',function(){ed.from=parseInt(from.value,10);});
+      var to=el('input',{type:'text',id:'eto',value:String(ed.to)});to.addEventListener('input',function(){ed.to=parseInt(to.value,10);});
+      var catSel2=catPicker([['',FLOW_CATS]],ed.cat,function(v){ed.cat=v;});
+      var note2=el('textarea',{id:'enote'});note2.value=ed.note;note2.style.minHeight='60px';note2.addEventListener('input',function(){ed.note=note2.value;});
+      p.appendChild(el('div',{class:'box'},
+        el('h3',{text:ed.id?'Edit conversation flow error':'New conversation flow error'}),
+        el('div',{class:'row'},el('label',{class:'small',text:'from turn'}),from,el('label',{class:'small',text:'to turn (of '+max+')'}),to),
+        el('label',{class:'small',text:'Category'}),catSel2,
+        el('label',{class:'small',text:'What is wrong, in a few words (required for "Other flow problem")'}),note2,
+        ed.err?el('div',{class:'warn',text:ed.err}):null,
+        el('div',{class:'row'},el('button',{class:'primary',text:'Save error',onclick:saveEdit}),el('button',{text:'Cancel',onclick:function(){S.editing=null;renderPanel();}}))));
+    }
+  }
+  var list=el('div',{class:'box'},el('h3',{text:'Errors in this dialogue ('+a.errors.length+')'}));
+  if(!a.errors.length)list.appendChild(el('div',{class:'small',text:'None marked yet.'}));
+  a.errors.slice().sort(function(x,y){return (x.kind==='word'?x.turn:x.turns[0])-(y.kind==='word'?y.turn:y.turns[0]);}).forEach(function(e){
+    var head=e.kind==='word'?('turn '+e.turn+' · '+e.family+' · '+e.category):('turns '+turnsLabel(e)+' · flow · '+e.category);
+    list.appendChild(el('div',{style:'margin:6px 0;padding:6px;border-top:1px solid #eee'},
+      el('div',{class:'small',text:head}),
+      e.kind==='word'?el('div',{class:'ar',dir:'auto',style:'font-size:18px',text:e.span_text+'  →  '+(e.remove?'(remove)':e.replacement)}):null,
+      el('button',{text:'Edit',onclick:function(){startEditById(e.id);}}),' ',
+      el('button',{class:'danger',text:'Delete',onclick:function(){if(confirm('Delete this error?')){a.errors=a.errors.filter(function(x){return x.id!==e.id;});S.editing=null;saveLocal();render();}}})));
+  });
+  p.appendChild(list);
+  var vb=el('div',{class:'box'},el('h3',{text:'This dialogue overall'}));
+  vb.appendChild(el('div',{class:'small',text:'How natural does the whole conversation sound? (before your corrections)'}));
+  NAT.forEach(function(v){
+    var r=el('input',{type:'radio',name:'naturalness',value:String(v[0]),checked:a.naturalness===v[0]});
+    r.addEventListener('change',function(){a.naturalness=v[0];saveLocal();});
+    vb.appendChild(el('label',{class:'opt'},r,' '+v[1]));
+  });
+  vb.appendChild(el('div',{class:'small',text:'Verdict:'}));
+  VERDICTS.forEach(function(v){
+    var r=el('input',{type:'radio',name:'verdict',value:v[0],checked:a.verdict===v[0]});
+    r.addEventListener('change',function(){a.verdict=v[0];saveLocal();});
+    vb.appendChild(el('label',{class:'opt'},r,' '+v[1]));
+  });
+  if(DIAL_CATS.length)vb.appendChild(el('div',{class:'small',text:'Problems with the whole dialogue (optional):'}));
+  DIAL_CATS.forEach(function(c){
+    var cb=el('input',{type:'checkbox',checked:a.dialogue_categories.indexOf(c)>=0});
+    cb.addEventListener('change',function(){var k=a.dialogue_categories.indexOf(c);if(cb.checked&&k<0)a.dialogue_categories.push(c);if(!cb.checked&&k>=0)a.dialogue_categories.splice(k,1);saveLocal();});
+    vb.appendChild(el('label',{class:'opt'},cb,' '+c));
+  });
+  var dc=el('textarea',{placeholder:'Comment (optional)'});dc.value=a.dialogue_comment;dc.style.minHeight='50px';
+  dc.addEventListener('input',function(){a.dialogue_comment=dc.value;saveLocal();});
+  vb.appendChild(dc);
+  vb.appendChild(el('div',{class:'row'},
+    el('button',{class:'primary',text:a.done?'Done (click to reopen)':'Mark done and go on',onclick:completeDialogue}),
+    el('button',{text:'Previous',onclick:function(){go(S.cur-1);}}),
+    el('button',{text:'Next',onclick:function(){go(S.cur+1);}})));
+  p.appendChild(vb);
+  if(S.doneSinceExport>=8)p.appendChild(el('div',{class:'warn',text:'You have finished '+S.doneSinceExport+' dialogues since the last export. Please click Export now to keep a backup.'}));
+  if(S.msg&&S.dialogues.length)p.appendChild(el('div',{class:'warn',text:S.msg}));
+}
+function saveEdit(){
+  var ed=S.editing,d=S.dialogues[S.cur],a=S.ann[d.dialogue_id];
+  var note=(ed.note||'').trim();
+  if(!ed.cat){ed.err='Choose a category.';return renderPanel();}
+  var rec;
+  if(ed.kind==='word'){
+    if(ed.cat==='Other'&&!note){ed.err='A note is required for "Other".';return renderPanel();}
+    var rep=(ed.replacement||'').trim();
+    if(!ed.remove&&!rep){ed.err='Type what it should be, or tick "remove these words".';return renderPanel();}
+    if(!ed.remove&&rep===ed.spanText.trim()){ed.err='The replacement is the same as the selected words.';return renderPanel();}
+    var clash=a.errors.some(function(e){return e.kind==='word'&&e.turn===ed.turn&&e.id!==ed.id&&ed.start<e.span_end&&ed.end>e.span_start;});
+    if(clash){ed.err='These words overlap another error already marked in this turn. Edit that one, or select different words.';return renderPanel();}
+    rec={id:ed.id||('e'+Date.now()+Math.floor(Math.random()*1000)),kind:'word',turn:ed.turn,span_start:ed.start,span_end:ed.end,span_text:ed.spanText,
+      family:famOfWord(ed.cat),category:ed.cat,replacement:ed.remove?'':rep,remove:!!ed.remove,script:ed.remove?'none':scriptOf(rep),note:note};
+  }else{
+    var max=d.turns.length;
+    if(!(ed.from>=1&&ed.to>=ed.from&&ed.to<=max)){ed.err='Check the turn numbers: from must be at least 1, to at most '+max+', and to not smaller than from.';return renderPanel();}
+    if(ed.cat==='Other flow problem'&&!note){ed.err='Say in a few words what is wrong.';return renderPanel();}
+    var turns=[];for(var k=ed.from;k<=ed.to;k++)turns.push(k);
+    rec={id:ed.id||('e'+Date.now()+Math.floor(Math.random()*1000)),kind:'flow',turns:turns,family:'Flow',category:ed.cat,note:note};
+  }
+  if(ed.id)a.errors=a.errors.map(function(e){return e.id===ed.id?rec:e;});else a.errors.push(rec);
+  S.editing=null;saveLocal();render();
+}
+function completeDialogue(){
+  var d=S.dialogues[S.cur],a=S.ann[d.dialogue_id];
+  if(a.done){a.done=false;a.completed_at=null;saveLocal();render();return;}
+  if(!a.naturalness){S.msg='Rate how natural the dialogue sounds first (1 to 5).';return renderPanel();}
+  if(!a.verdict){S.msg='Choose the overall verdict first.';return renderPanel();}
+  if(a.verdict==='ok'&&a.errors.length&&!confirm('You marked errors but chose "Acceptable as it is". Continue anyway?'))return;
+  if(a.verdict==='fixed'&&!a.errors.length){S.msg='You chose "Acceptable after my corrections" but marked no errors.';return renderPanel();}
+  S.msg='';a.done=true;a.completed_at=now();S.doneSinceExport++;saveLocal();
+  S.cur=nextPending();S.editing=null;render();
+}
+
+/* ---------- timer, shortcuts ---------- */
+['mousemove','keydown','click','scroll'].forEach(function(ev){document.addEventListener(ev,function(){S.lastActivity=Date.now();},true);});
+setInterval(function(){
+  if(!S.dialogues.length||document.visibilityState!=='visible')return;
+  if(Date.now()-S.lastActivity>90000)return;
+  var d=S.dialogues[S.cur];if(!d)return;var a=S.ann[d.dialogue_id];if(a.done)return;
+  a.time_seconds+=1;var t=$('#timer');if(t)t.textContent='time on this dialogue: '+fmt(a.time_seconds);
+  if(a.time_seconds%20===0)saveLocal();
+},1000);
+document.addEventListener('keydown',function(e){
+  if(!S.dialogues.length||!e.altKey)return;
+  if(e.key==='ArrowRight'){e.preventDefault();go(S.cur+1);}
+  if(e.key==='ArrowLeft'){e.preventDefault();go(S.cur-1);}
+});
+window.addEventListener('beforeunload',function(e){if(S.dialogues.length&&S.doneSinceExport>0){e.preventDefault();e.returnValue='';}});
+window.__dg={S:S,render:render,loadInput:loadInput,mergeProgress:mergeProgress,buildOutput:buildOutput,buildCsv:buildCsv,DEMO:DEMO,startWord:startWord,startFlow:startFlow,
+  saveEdit:saveEdit,completeDialogue:completeDialogue,go:go,applyWordErrors:applyWordErrors,WORD_GROUPS:WORD_GROUPS,FLOW_CATS:FLOW_CATS,renderGuide:renderGuide};
+render();
+})();
+</script>
+</body>
+</html>
